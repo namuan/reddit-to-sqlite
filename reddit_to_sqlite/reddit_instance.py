@@ -4,6 +4,7 @@ Get a connection to the Reddit API
 import json
 import platform
 from pathlib import Path
+from typing import Dict
 
 import praw
 import typer
@@ -11,7 +12,7 @@ import typer
 from . import __version__
 
 
-def get_auth(auth_path: Path) -> dict[str, str]:
+def get_auth(auth_path: Path) -> Dict[str, str]:
     """Retrieves Reddit auth data from file, or prompts for it and saves it"""
 
     if auth_path.exists():
@@ -29,7 +30,7 @@ def get_auth(auth_path: Path) -> dict[str, str]:
     return data
 
 
-def reddit_instance(auth_data: dict[str, str]) -> praw.Reddit:
+def reddit_instance(auth_data: Dict[str, str]) -> praw.Reddit:
     """Returns an instance of praw.Reddit"""
 
     author = "catherinedevlin"

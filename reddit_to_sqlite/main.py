@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from functools import partial
 from itertools import takewhile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Tuple
 
 import praw
 import sqlite_utils
@@ -34,26 +34,23 @@ def query_val(db, qry: str) -> Optional[int]:
 
 
 def latest_from_user_utc(db, table_name: str, username: str) -> Optional[int]:
-
     qry = f"select max(created_utc) from {table_name} where author = '{username}'"
     return query_val(db, qry)
 
 
 def created_since(row, target_sec_utc: Optional[int]) -> bool:
-
     result = (not target_sec_utc) or (row.created_utc >= target_sec_utc)
     LOGGER.debug(f"{row.id=} {row.created_utc=} >= {target_sec_utc=}? {result}")
     return result
 
 
 def save_user(
-    db,
-    reddit: praw.Reddit,
-    username: str,
-    post_reload_sec: int,
-    comment_reload_sec: int,
+        db,
+        reddit: praw.Reddit,
+        username: str,
+        post_reload_sec: int,
+        comment_reload_sec: int,
 ) -> None:
-
     user = reddit.redditor(username)
     latest_post_utc = latest_from_user_utc(db=db, table_name="posts", username=username)
     get_since = latest_post_utc and (latest_post_utc - post_reload_sec)
@@ -81,19 +78,17 @@ def save_user(
 
 
 def latest_post_in_subreddit_utc(db, subreddit: str) -> Optional[int]:
-
     qry = f"select max(created_utc) from posts where subreddit = '{subreddit}'"
     return query_val(db, qry)
 
 
 def save_subreddit(
-    db,
-    reddit: praw.Reddit,
-    subreddit_name: str,
-    post_reload_sec: int,
-    comment_reload_sec: int,
+        db,
+        reddit: praw.Reddit,
+        subreddit_name: str,
+        post_reload_sec: int,
+        comment_reload_sec: int,
 ) -> None:
-
     subreddit = reddit.subreddit(subreddit_name)
     latest_post_utc = latest_post_in_subreddit_utc(db=db, subreddit=subreddit)
     get_since = latest_post_utc and (latest_post_utc - post_reload_sec)
@@ -118,11 +113,10 @@ def legalize(val):
     return val
 
 
-def _parent_ids_interpreted(dct: dict[str, typing.Any]) -> dict[str, typing.Any]:
-
+def _parent_ids_interpreted(dct: typing.Dict[str, typing.Any]) -> Dict[str, typing.Any]:
     if not dct.get('parent_id'):
-        return dct 
-    
+        return dct
+
     prefix = dct['parent_id'][:3]
     dct['parent_clean_id'] = dct['parent_id'][3:]
     if prefix == 't1_':
@@ -131,15 +125,15 @@ def _parent_ids_interpreted(dct: dict[str, typing.Any]) -> dict[str, typing.Any]
         dct['parent_post_id'] = dct['parent_clean_id']
     return dct
 
-def saveable(item: praw.models.reddit.base.RedditBase) -> dict[str, typing.Any]:
 
+def saveable(item: praw.models.reddit.base.RedditBase) -> Dict[str, typing.Any]:
     """Generate a saveable dict from an instance"""
 
     result = {k: legalize(v) for k, v in item.__dict__.items() if not k.startswith("_")}
-    return _parent_ids_interpreted(result) 
+    return _parent_ids_interpreted(result)
 
 
-def interpret_target(raw_target: str) -> tuple[typing.Callable, str]:
+def interpret_target(raw_target: str) -> Tuple[typing.Callable, str]:
     """Determine saving function and target string from input target"""
 
     HELP = "Target must be u/username or r/subreddit"
@@ -151,11 +145,13 @@ def interpret_target(raw_target: str) -> tuple[typing.Callable, str]:
     assert pieces[-2] in SAVERS, HELP
     return SAVERS[pieces[-2]], pieces[-1]
 
+
 def create_index(db, tbl, col):
     try:
         db[tbl].create_index([col], if_not_exists=True)
     except sqlite3.OperationalError as exc:
-        LOGGER.warn(f"Error indexing {tbl}.{col}: {exc}")
+        LOGGER.warning(f"Error indexing {tbl}.{col}: {exc}")
+
 
 def create_fts_index(db, tbl, cols):
     try:
@@ -165,23 +161,20 @@ def create_fts_index(db, tbl, cols):
     except sqlite3.OperationalError as exc:
         LOGGER.info(f"While setting up full-text search on {tbl}.{cols}:")
         LOGGER.info(exc)
- 
 
 
 def setup_ddl(db):
-
     for tbl in ("posts", "comments"):
         for col in ("author", "created_utc", "subreddit", "score", "removed"):
             create_index(db, tbl, col)
     for col in ("parent_clean_id", "parent_comment_id", "parent_post_id"):
         create_index(db, 'comments', col)
 
-    create_fts_index(db, 'posts', ['title', 'selftext']) 
-    create_fts_index(db, 'comments', ['body', ]) 
+    create_fts_index(db, 'posts', ['title', 'selftext'])
+    create_fts_index(db, 'comments', ['body', ])
 
 
 def set_loglevel(verbosity: int):
-
     verbosity = min(verbosity, 2)
     LEVELS = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
     LOGGER.setLevel(LEVELS[verbosity])
@@ -190,15 +183,15 @@ def set_loglevel(verbosity: int):
 
 @app.command()
 def main(
-    target: str = typer.Argument(str, help="u/username or r/subreddit to collect"),
-    auth: Path = typer.Option(
-        Path("~/.config/reddit-to-sqlite.json"),
-        help="File to retrieve/save Reddit auth",
-    ),
-    db: Path = typer.Option(Path("reddit.db"), help="database file"),
-    post_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
-    comment_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
-    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="More logging"),
+        target: str = typer.Argument(str, help="u/username or r/subreddit to collect"),
+        auth: Path = typer.Option(
+            Path("~/.config/reddit-to-sqlite.json"),
+            help="File to retrieve/save Reddit auth",
+        ),
+        db: Path = typer.Option(Path("reddit.db"), help="database file"),
+        post_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
+        comment_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
+        verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="More logging"),
 ):
     """Load posts and comments from Reddit to sqlite."""
     set_loglevel(verbosity=verbose)
