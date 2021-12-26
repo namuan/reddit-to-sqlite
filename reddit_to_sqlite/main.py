@@ -1,12 +1,10 @@
 import logging
 import sqlite3
-import time
 import typing
-from datetime import date, timedelta
 from functools import partial
 from itertools import takewhile
 from pathlib import Path
-from typing import Optional, Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import praw
 import sqlite_utils
@@ -45,11 +43,11 @@ def created_since(row, target_sec_utc: Optional[int]) -> bool:
 
 
 def save_user(
-        db,
-        reddit: praw.Reddit,
-        username: str,
-        post_reload_sec: int,
-        comment_reload_sec: int,
+    db,
+    reddit: praw.Reddit,
+    username: str,
+    post_reload_sec: int,
+    comment_reload_sec: int,
 ) -> None:
     user = reddit.redditor(username)
     latest_post_utc = latest_from_user_utc(db=db, table_name="posts", username=username)
@@ -83,11 +81,11 @@ def latest_post_in_subreddit_utc(db, subreddit: str) -> Optional[int]:
 
 
 def save_subreddit(
-        db,
-        reddit: praw.Reddit,
-        subreddit_name: str,
-        post_reload_sec: int,
-        comment_reload_sec: int,
+    db,
+    reddit: praw.Reddit,
+    subreddit_name: str,
+    post_reload_sec: int,
+    comment_reload_sec: int,
 ) -> None:
     subreddit = reddit.subreddit(subreddit_name)
     latest_post_utc = latest_post_in_subreddit_utc(db=db, subreddit=subreddit)
@@ -114,15 +112,15 @@ def legalize(val):
 
 
 def _parent_ids_interpreted(dct: typing.Dict[str, typing.Any]) -> Dict[str, typing.Any]:
-    if not dct.get('parent_id'):
+    if not dct.get("parent_id"):
         return dct
 
-    prefix = dct['parent_id'][:3]
-    dct['parent_clean_id'] = dct['parent_id'][3:]
-    if prefix == 't1_':
-        dct['parent_comment_id'] = dct['parent_clean_id']
-    elif prefix == 't3_':
-        dct['parent_post_id'] = dct['parent_clean_id']
+    prefix = dct["parent_id"][:3]
+    dct["parent_clean_id"] = dct["parent_id"][3:]
+    if prefix == "t1_":
+        dct["parent_comment_id"] = dct["parent_clean_id"]
+    elif prefix == "t3_":
+        dct["parent_post_id"] = dct["parent_clean_id"]
     return dct
 
 
@@ -155,9 +153,7 @@ def create_index(db, tbl, col):
 
 def create_fts_index(db, tbl, cols):
     try:
-        db[tbl].enable_fts(
-            cols, tokenize="porter", create_triggers=True
-        )
+        db[tbl].enable_fts(cols, tokenize="porter", create_triggers=True)
     except sqlite3.OperationalError as exc:
         LOGGER.info(f"While setting up full-text search on {tbl}.{cols}:")
         LOGGER.info(exc)
@@ -168,10 +164,16 @@ def setup_ddl(db):
         for col in ("author", "created_utc", "subreddit", "score", "removed"):
             create_index(db, tbl, col)
     for col in ("parent_clean_id", "parent_comment_id", "parent_post_id"):
-        create_index(db, 'comments', col)
+        create_index(db, "comments", col)
 
-    create_fts_index(db, 'posts', ['title', 'selftext'])
-    create_fts_index(db, 'comments', ['body', ])
+    create_fts_index(db, "posts", ["title", "selftext"])
+    create_fts_index(
+        db,
+        "comments",
+        [
+            "body",
+        ],
+    )
 
 
 def set_loglevel(verbosity: int):
@@ -181,20 +183,7 @@ def set_loglevel(verbosity: int):
     LOGGER.addHandler(logging.StreamHandler())
 
 
-@app.command()
-def main(
-        target: str = typer.Argument(str, help="u/username or r/subreddit to collect"),
-        auth: Path = typer.Option(
-            Path("~/.config/reddit-to-sqlite.json"),
-            help="File to retrieve/save Reddit auth",
-        ),
-        db: Path = typer.Option(Path("reddit.db"), help="database file"),
-        post_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
-        comment_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
-        verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="More logging"),
-):
-    """Load posts and comments from Reddit to sqlite."""
-    set_loglevel(verbosity=verbose)
+def load_data_and_save(auth, target, db, post_reload, comment_reload):
     reddit = reddit_instance(get_auth(auth.expanduser()))
     saver, save_me = interpret_target(target)
     database = sqlite_utils.Database(db.expanduser())
@@ -208,6 +197,23 @@ def main(
     ITEM_VIEW_DEF = (Path(__file__).parent / "view_def.sql").read_text()
     database.create_view("items", ITEM_VIEW_DEF, replace=True)
     setup_ddl(database)
+
+
+@app.command()
+def main(
+    target: str = typer.Argument(str, help="u/username or r/subreddit to collect"),
+    auth: Path = typer.Option(
+        Path("~/.config/reddit-to-sqlite.json"),
+        help="File to retrieve/save Reddit auth",
+    ),
+    db: Path = typer.Option(Path("reddit.db"), help="database file"),
+    post_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
+    comment_reload: int = typer.Option(7, help="Age of posts to reload (days)"),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="More logging"),
+):
+    """Load posts and comments from Reddit to sqlite."""
+    set_loglevel(verbosity=verbose)
+    load_data_and_save(auth, target, db, post_reload, comment_reload)
 
 
 if __name__ == "__main__":

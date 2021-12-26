@@ -1,4 +1,4 @@
-SELECT 'comment' AS item_type, 
+SELECT 'comment' AS item_type,
        id,
        '' AS title,
        body,
@@ -17,7 +17,7 @@ SELECT 'comment' AS item_type,
        quarantine,
        distinguished
 FROM   comments
-UNION ALL 
+UNION ALL
 SELECT 'post' AS item_type,
        id,
        title,
@@ -36,7 +36,7 @@ SELECT 'post' AS item_type,
        score,
        null as quarantine,
        distinguished
-FROM   posts 
+FROM   posts
 
--- posts.url is just the permalink with https:// 
--- except for link posts, in which case it is the destination 
+-- posts.url is just the permalink with https://
+-- except for link posts, in which case it is the destination
