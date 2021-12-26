@@ -2,19 +2,19 @@ import logging
 import sqlite3
 import typing
 from functools import partial
-from itertools import takewhile
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import praw
 import sqlite_utils
 import typer
+from itertools import takewhile
 
 from .reddit_instance import get_auth, reddit_instance
 
 LIMIT = 1000
 SECONDS_IN_DAY = 60 * 60 * 24
-LOGGER = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 app = typer.Typer()
 
 
@@ -27,7 +27,7 @@ def query_val(db, qry: str) -> Optional[int]:
             return None
         raise
     result = curs.fetchone()
-    LOGGER.debug(f"{qry=} {result=}")
+    logger.debug("qry=%s result=%s", qry, result)
     return result[0]
 
 
@@ -38,7 +38,13 @@ def latest_from_user_utc(db, table_name: str, username: str) -> Optional[int]:
 
 def created_since(row, target_sec_utc: Optional[int]) -> bool:
     result = (not target_sec_utc) or (row.created_utc >= target_sec_utc)
-    LOGGER.debug(f"{row.id=} {row.created_utc=} >= {target_sec_utc=}? {result}")
+    logger.debug(
+        "row.id=%s row.created_utc=%s >= target_sec_utc=%s? result",
+        row.id,
+        row.created_utc,
+        target_sec_utc,
+        result,
+    )
     return result
 
 
@@ -52,7 +58,7 @@ def save_user(
     user = reddit.redditor(username)
     latest_post_utc = latest_from_user_utc(db=db, table_name="posts", username=username)
     get_since = latest_post_utc and (latest_post_utc - post_reload_sec)
-    LOGGER.info(f"Getting posts by {username} since timestamp {get_since}")
+    logger.info("Getting posts by %s since timestamp %s", username, get_since)
     _takewhile = partial(created_since, target_sec_utc=get_since)
 
     db["posts"].upsert_all(
@@ -61,11 +67,8 @@ def save_user(
         alter=True,
     )
 
-    latest_comment_utc = latest_from_user_utc(
-        db=db, table_name="comments", username=username
-    )
     get_since = latest_post_utc and (latest_post_utc - comment_reload_sec)
-    LOGGER.info(f"Getting comments by {username} since timestamp {get_since}")
+    logger.info("Getting comments by %s since timestamp %s", username, get_since)
     _takewhile = partial(created_since, target_sec_utc=get_since)
 
     db["comments"].upsert_all(
@@ -90,10 +93,10 @@ def save_subreddit(
     subreddit = reddit.subreddit(subreddit_name)
     latest_post_utc = latest_post_in_subreddit_utc(db=db, subreddit=subreddit)
     get_since = latest_post_utc and (latest_post_utc - post_reload_sec)
-    LOGGER.info(f"Getting posts in {subreddit} since timestamp {get_since}")
+    logger.info("Getting posts in %s since timestamp %s", subreddit, get_since)
     _takewhile = partial(created_since, target_sec_utc=get_since)
     for post in takewhile(_takewhile, subreddit.new(limit=LIMIT)):
-        LOGGER.debug(f"Post id {post.id}")
+        logger.debug("Post id %s", post.id)
         db["posts"].upsert(saveable(post), pk="id", alter=True)
         post.comments.replace_more()
         db["comments"].upsert_all(
@@ -134,29 +137,28 @@ def saveable(item: praw.models.reddit.base.RedditBase) -> Dict[str, typing.Any]:
 def interpret_target(raw_target: str) -> Tuple[typing.Callable, str]:
     """Determine saving function and target string from input target"""
 
-    HELP = "Target must be u/username or r/subreddit"
-    SAVERS = {"u": save_user, "r": save_subreddit}
+    help_message = "Target must be u/username or r/subreddit"
+    savers = {"u": save_user, "r": save_subreddit}
 
-    assert "/" in raw_target, HELP
+    assert "/" in raw_target, help_message
     raw_target = raw_target.lower()
     pieces = raw_target.split("/")
-    assert pieces[-2] in SAVERS, HELP
-    return SAVERS[pieces[-2]], pieces[-1]
+    assert pieces[-2] in savers, help_message
+    return savers[pieces[-2]], pieces[-1]
 
 
 def create_index(db, tbl, col):
     try:
         db[tbl].create_index([col], if_not_exists=True)
-    except sqlite3.OperationalError as exc:
-        LOGGER.warning(f"Error indexing {tbl}.{col}: {exc}")
+    except sqlite3.OperationalError:
+        logger.exception("Error indexing %s.%s:", tbl, col)
 
 
 def create_fts_index(db, tbl, cols):
     try:
         db[tbl].enable_fts(cols, tokenize="porter", create_triggers=True)
-    except sqlite3.OperationalError as exc:
-        LOGGER.info(f"While setting up full-text search on {tbl}.{cols}:")
-        LOGGER.info(exc)
+    except sqlite3.OperationalError:
+        logger.exception("While setting up full-text search on %s.%s:", tbl, cols)
 
 
 def setup_ddl(db):
@@ -178,9 +180,9 @@ def setup_ddl(db):
 
 def set_loglevel(verbosity: int):
     verbosity = min(verbosity, 2)
-    LEVELS = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
-    LOGGER.setLevel(LEVELS[verbosity])
-    LOGGER.addHandler(logging.StreamHandler())
+    log_levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
+    logger.setLevel(log_levels[verbosity])
+    logger.addHandler(logging.StreamHandler())
 
 
 def load_data_and_save(auth, target, db, post_reload, comment_reload):
@@ -194,8 +196,8 @@ def load_data_and_save(auth, target, db, post_reload, comment_reload):
         post_reload_sec=post_reload * SECONDS_IN_DAY,
         comment_reload_sec=comment_reload * SECONDS_IN_DAY,
     ),
-    ITEM_VIEW_DEF = (Path(__file__).parent / "view_def.sql").read_text()
-    database.create_view("items", ITEM_VIEW_DEF, replace=True)
+    item_view_def = (Path(__file__).parent / "view_def.sql").read_text()
+    database.create_view("items", item_view_def, replace=True)
     setup_ddl(database)
 
 
