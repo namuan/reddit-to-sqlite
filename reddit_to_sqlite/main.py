@@ -10,7 +10,7 @@ import praw  # type: ignore
 import sqlite_utils
 import typer
 
-from .reddit_instance import get_auth, reddit_instance
+from reddit_to_sqlite.reddit_instance import get_auth, reddit_instance
 
 LIMIT = 1000
 SECONDS_IN_DAY = 60 * 60 * 24
