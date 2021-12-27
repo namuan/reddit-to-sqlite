@@ -104,9 +104,9 @@ no_implicit_optional = true
 strict_equality = true
 warn_unused_ignores = true
 warn_redundant_casts = true
-warn_return_any = true
 check_untyped_defs = true
 show_error_codes = true
+warn_return_any = false
 
 [tool.poetry.scripts]
 reddit-to-sqlite = "reddit_to_sqlite.main:app"

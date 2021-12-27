@@ -4,9 +4,9 @@ Get a connection to the Reddit API
 import json
 import platform
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict
 
-import praw
+import praw  # type: ignore
 import typer
 
 from . import __version__
@@ -30,7 +30,7 @@ def get_auth(auth_path: Path) -> Dict[str, str]:
     return data
 
 
-def reddit_instance(auth_data: Dict[str, str]) -> praw.Reddit:
+def reddit_instance(auth_data: Dict[str, str]) -> Any:
     """Returns an instance of praw.Reddit"""
 
     author = "catherinedevlin"
