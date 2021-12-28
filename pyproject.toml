@@ -57,6 +57,7 @@ python-kacl = "*"
 pyupgrade = "*"
 tryceratops = "*"
 commitizen = "^2.20.3"
+types-setuptools = "^57.4.5"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
